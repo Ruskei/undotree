@@ -153,19 +153,90 @@ local function sort_tree_by_latest(tree)
 	return max_seq
 end
 
+--- @param offset integer[]
+--- @param idx integer
+--- @return integer off
+local function offset_at_index(offset, idx)
+	local off = 0
+	for k = 1, idx do
+		if offset[k] then
+			off = off + offset[k]
+		end
+	end
+
+	return off
+end
+
 --- @param graph string[]
 --- @param symbol string
---- @param start_idx number
---- @param end_idx number
-local function fill_graph(graph, symbol, start_idx, end_idx)
+--- @param start_idx integer
+--- @param end_idx integer
+--- @param offset integer[]
+local function fill_graph(graph, symbol, start_idx, end_idx, offset)
 	if end_idx < start_idx then
 		return
 	end
 	for i = start_idx, end_idx do
-		if #graph < i then
-			graph[i] = symbol
+		local off = offset_at_index(offset, i)
+		if not graph[off + i] then
+			graph[off + i] = symbol
 		else
-			graph[i] = graph[i] .. " " .. symbol
+			graph[off + i] = graph[off + i] .. symbol
+		end
+	end
+end
+
+--- @param str string
+--- @return integer count
+local function count_non_space(str)
+	local count = 0
+	for i = 1, #str do
+		local char = string.sub(str, i, i)
+		if char ~= " " then
+			count = count + 1
+		end
+	end
+
+	return count
+end
+
+--- @param graph string[]
+--- @param start_idx integer
+--- @param end_idx integer
+--- @param offset integer[]
+local function draw_line(graph, start_idx, end_idx, offset)
+	if end_idx < start_idx then
+		return
+	end
+	for i = (offset_at_index(offset, start_idx) + start_idx), (offset_at_index(offset, end_idx) + end_idx) do
+		if not graph[i] then
+			graph[i] = "| "
+		else
+			local symbol
+
+			local previous_non_spaces
+			if not graph[i - 1] then
+				previous_non_spaces = 0
+			else
+				previous_non_spaces = count_non_space(graph[i - 1])
+			end
+
+			local next_non_spaces
+			if not graph[i + 1] then
+				next_non_spaces = 0
+			else
+				next_non_spaces = count_non_space(graph[i + 1])
+			end
+
+			if previous_non_spaces < next_non_spaces + 1 then
+				symbol = "/ "
+			elseif previous_non_spaces > next_non_spaces + 1 then
+				symbol = "\\ "
+			else
+				symbol = "| "
+			end
+
+			graph[i] = graph[i] .. symbol
 		end
 	end
 end
@@ -173,59 +244,127 @@ end
 --- @param tree Node
 --- @param graph string[]
 --- @param parent_seq number
---- @param line2seq number[]
+--- @param line2seq integer[]
 --- @param other_info table<number, table>
-local function _draw_new(tree, graph, parent_seq, line2seq, other_info)
-	-- table.insert(graph, "START DEPTH: " .. depth)
+--- @param offset integer[] Any sequence N is offset by sum of offset[i] where i is 0..N
+local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 	local cur_node = tree
 	local cur_seq = parent_seq
 	while #cur_node.children == 1 do
 		cur_node = cur_node.children[1]
 
-		fill_graph(graph, "*" .. cur_seq, cur_seq, cur_seq)
-		fill_graph(graph, "|" .. cur_node.seq, cur_seq + 1, cur_node.seq - 1)
-		-- table.insert(graph, "*, s: " .. cur_node.seq)
+		fill_graph(graph, "* ", cur_seq, cur_seq, offset)
+		-- fill_graph(graph, "|", cur_seq + 1, cur_node.seq - 1, offset)
+		draw_line(graph, cur_seq + 1, cur_node.seq - 1, offset)
+
 		cur_seq = cur_node.seq
-		line2seq[cur_node.seq] = cur_node.seq
+
+		line2seq[cur_node.seq + offset_at_index(offset, cur_node.seq)] = cur_node.seq
 		other_info[cur_node.seq] =
 			{ save = cur_node.save, time = cur_node.time, lnum = cur_node.seq, parent = cur_node.parent }
 	end
 
-	-- table.insert(graph, "#C: " .. #cur_node.children)
-
 	if #cur_node.children == 0 then
-		fill_graph(graph, "|" .. cur_node.seq, cur_seq, cur_node.seq - 1)
-		fill_graph(graph, "^" .. cur_node.seq, cur_node.seq, cur_node.seq)
-		line2seq[cur_node.seq] = cur_node.seq
+		-- fill_graph(graph, "|", cur_seq, cur_node.seq - 1, offset)
+		draw_line(graph, cur_seq, cur_node.seq - 1, offset)
+		fill_graph(graph, "^", cur_node.seq, cur_node.seq, offset)
+		line2seq[cur_node.seq + offset_at_index(offset, cur_node.seq)] = cur_node.seq
 		other_info[cur_node.seq] =
 			{ save = cur_node.save, time = cur_node.time, lnum = cur_node.seq, parent = cur_node.parent }
-		-- table.insert(graph, "END")
 		return
 	end
 
-	line2seq[cur_node.seq] = cur_node.seq
+	line2seq[cur_node.seq + offset_at_index(offset, cur_node.seq)] = cur_node.seq
 	other_info[cur_node.seq] =
 		{ save = cur_node.save, time = cur_node.time, lnum = cur_node.seq, parent = cur_node.parent }
-	fill_graph(graph, "|" .. cur_node.seq, cur_seq, cur_node.seq - 1)
-	fill_graph(graph, "*" .. cur_node.seq, cur_node.seq, cur_node.seq)
+	draw_line(graph, cur_seq, cur_node.seq - 1, offset)
+	-- fill_graph(graph, "|", cur_seq, cur_node.seq - 1, offset)
+	fill_graph(graph, "* ", cur_node.seq, cur_node.seq, offset)
 
 	sort_tree_by_latest(cur_node)
 
+	-- local sub_offset = {}
+	-- for k, v in pairs(offset) do
+	-- 	sub_offset[k] = v
+	-- end
+	--
+	-- if not sub_offset[cur_node.seq + 1] then
+	-- 	sub_offset[cur_node.seq + 1] = 1
+	-- else
+	-- 	sub_offset[cur_node.seq + 1] = sub_offset[cur_node.seq + 1] + 1
+	-- end
+	local my_offset = {}
+	for k, v in pairs(offset) do
+		my_offset[k] = v
+	end
+
+	if not offset[cur_node.seq + 1] then
+		offset[cur_node.seq + 1] = 1
+	else
+		offset[cur_node.seq + 1] = offset[cur_node.seq + 1] + 1
+	end
+
+	-- fill in existing; this is added on the right so can't change aneything that's laready there
+	local branch_idx = offset_at_index(offset, cur_seq + 1) + cur_seq + 1
+	if graph[branch_idx] then
+		local any = false
+		local insertion = ""
+		for i = 1, #graph[branch_idx] do
+			local char = string.sub(graph[branch_idx], i, i)
+			if char ~= " " then
+				if not any then
+					any = true
+					insertion = "|"
+				else
+					insertion = insertion .. " |"
+				end
+			end
+		end
+
+		if insertion ~= "" then
+			table.insert(graph, branch_idx, insertion)
+		end
+	end
+
+	-- update line2seq, if below insert, no change, if above, add 1
+	local _line2seq = {}
+	for k, v in pairs(line2seq) do
+		if v <= cur_node.seq then
+			_line2seq[k] = v
+		else
+			_line2seq[k + 1] = v
+		end
+	end
+
+	for k, _ in pairs(line2seq) do
+		line2seq[k] = nil
+	end
+
+	for k, v in pairs(_line2seq) do
+		line2seq[k] = v
+	end
+
 	for _, sub_node in ipairs(cur_node.children) do
-		fill_graph(graph, "|" .. sub_node.seq, cur_seq + 1, sub_node.seq - 1)
-		_draw_new(sub_node, graph, sub_node.seq, line2seq, other_info)
+		draw_line(graph, cur_seq + 1, sub_node.seq, my_offset)
+		-- fill_graph(graph, "|", cur_seq + 2, sub_node.seq, offset)
+		-- fill_graph(graph, "/", cur_seq + 1, cur_seq + 1, offset)
+
+		_draw_new(sub_node, graph, sub_node.seq, line2seq, other_info, offset)
+		line2seq[sub_node.seq + offset_at_index(offset, sub_node.seq)] = sub_node.seq
+		other_info[sub_node.seq] =
+			{ save = sub_node.save, time = sub_node.time, lnum = sub_node.seq, parent = sub_node.parent }
 	end
 end
 
---- @param tree Node
---- @param graph string[]
---- @param parent_seq number
---- @param line2seq number[]
---- @param other_info table<number, table>
-local function draw_new(tree, graph, parent_seq, line2seq, other_info)
-	_draw_new(tree, graph, parent_seq, line2seq, other_info)
-	graph[1] = "*"
-end
+-- --- @param tree Node
+-- --- @param graph string[]
+-- --- @param parent_seq number
+-- --- @param line2seq number[]
+-- --- @param other_info table<number, table>
+-- local function draw_new(tree, graph, parent_seq, line2seq, other_info)
+-- 	_draw_new(tree, graph, parent_seq, line2seq, other_info, 1)
+-- 	graph[1] = "*"
+-- end
 
 --- @param tree Node
 --- @param graph string[]
@@ -239,7 +378,8 @@ local function gen_graph(tree, graph, line2seq, other_info, last_seq)
 	-- 	cur_seq = cur_seq + 1
 	-- end
 
-	draw_new(tree, graph, 1, line2seq, other_info)
+	_draw_new(tree, graph, 0, line2seq, other_info, { 1 })
+	graph[1] = "*"
 end
 
 local Undotree = {}
@@ -291,24 +431,24 @@ function Undotree:gen_graph_tree()
 		other_info[0] = { lnum = 1 }
 		gen_graph(normal_tree, graph, line2seq, other_info, undo_tree.seq_last)
 
-		-- self.seq2line[0] = #graph
-		-- self.line2seq[#graph] = 0
-		-- self.seq2parent[0] = nil
-		-- graph[1] = graph[1] .. string.rep(" ", 4) .. "(Original)"
-		--
-		-- for i = 2, #graph do
-		-- 	if line2seq[i] ~= nil then
-		-- 		local seq = line2seq[i]
-		-- 		self.seq2line[seq] = #graph - i + 1
-		-- 		self.line2seq[#graph - i + 1] = seq
-		-- 		self.seq2parent[seq] = other_info[seq].parent
-		-- 		graph[i] = graph[i]
-		-- 			.. string.rep(" ", 4)
-		-- 			.. seq
-		-- 			.. (other_info[seq].save and " s " or "   ")
-		-- 			.. time_ago(other_info[seq].time)
-		-- 	end
-		-- end
+		self.seq2line[0] = #graph
+		self.line2seq[#graph] = 0
+		self.seq2parent[0] = nil
+		graph[1] = graph[1] .. string.rep(" ", 4) .. "(Original)"
+
+		for i = 2, #graph do
+			if line2seq[i] ~= nil then
+				local seq = line2seq[i]
+				self.seq2line[seq] = #graph - i + 1
+				self.line2seq[#graph - i + 1] = seq
+				self.seq2parent[seq] = other_info[seq].parent
+				graph[i] = graph[i]
+					.. string.rep(" ", 4)
+					.. seq
+					.. (other_info[seq].save and " s " or "   ")
+					.. time_ago(other_info[seq].time)
+			end
+		end
 
 		conf.reverse_table(graph, self.char_graph)
 	end

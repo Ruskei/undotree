@@ -41,7 +41,8 @@ local find_star = function(lnum)
 	if line and line ~= "" then
 		local col = 1
 		while col <= #line do
-			if string.sub(line, col, col) == "*" then
+			local sel = string.sub(line, col, col)
+			if sel == "*" or sel == "^" then
 				return true, col - 1 -- found, position
 			end
 			col = col + 1
@@ -163,7 +164,7 @@ function Collector:run()
 
 	local lnum = self.undotree_info.seq2line[self.undotree_info.seq_cur]
 	local _, col = find_star(lnum)
-	-- self:set_selection({ lnum, col })
+	self:set_selection({ lnum, col })
 
 	local group = vim.api.nvim_create_augroup("Undotree_collector", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
