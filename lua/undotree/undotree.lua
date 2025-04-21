@@ -181,7 +181,7 @@ local function fill_graph(graph, symbol, start_idx, end_idx, offset)
 		if not graph[off + i] then
 			graph[off + i] = symbol
 		else
-			graph[off + i] = graph[off + i] .. symbol
+			graph[off + i] = string.gsub(graph[off + i] .. symbol, "%s+", " ")
 		end
 	end
 end
@@ -192,7 +192,7 @@ local function count_non_space(str)
 	local count = 0
 	for i = 1, #str do
 		local char = string.sub(str, i, i)
-		if char ~= " " then
+		if char == "/" or char == "|" or char == "\\" or char == "*" or char == "^" then
 			count = count + 1
 		end
 	end
@@ -204,13 +204,14 @@ end
 --- @param start_idx integer
 --- @param end_idx integer
 --- @param offset integer[]
-local function draw_line(graph, start_idx, end_idx, offset)
+--- @param branch boolean true if there's a branch after
+local function draw_line(graph, start_idx, end_idx, offset, branch)
 	if end_idx < start_idx then
 		return
 	end
 	for i = (offset_at_index(offset, start_idx) + start_idx), (offset_at_index(offset, end_idx) + end_idx) do
 		if not graph[i] then
-			graph[i] = "| "
+			graph[i] = "|"
 		else
 			local symbol
 
@@ -229,14 +230,18 @@ local function draw_line(graph, start_idx, end_idx, offset)
 			end
 
 			if previous_non_spaces < next_non_spaces + 1 then
-				symbol = "/ "
+				if branch then
+					symbol = "/_"
+				else
+					symbol = "/ "
+				end
 			elseif previous_non_spaces > next_non_spaces + 1 then
 				symbol = "\\ "
 			else
-				symbol = "| "
+				symbol = " | "
 			end
 
-			graph[i] = graph[i] .. symbol
+			graph[i] = string.gsub(graph[i] .. symbol, "%s+", " ")
 		end
 	end
 end
@@ -253,9 +258,8 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 	while #cur_node.children == 1 do
 		cur_node = cur_node.children[1]
 
-		fill_graph(graph, "* ", cur_seq, cur_seq, offset)
-		-- fill_graph(graph, "|", cur_seq + 1, cur_node.seq - 1, offset)
-		draw_line(graph, cur_seq + 1, cur_node.seq - 1, offset)
+		fill_graph(graph, " * ", cur_seq, cur_seq, offset)
+		draw_line(graph, cur_seq + 1, cur_node.seq - 1, offset, false)
 
 		cur_seq = cur_node.seq
 
@@ -265,9 +269,8 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 	end
 
 	if #cur_node.children == 0 then
-		-- fill_graph(graph, "|", cur_seq, cur_node.seq - 1, offset)
-		draw_line(graph, cur_seq, cur_node.seq - 1, offset)
-		fill_graph(graph, "^", cur_node.seq, cur_node.seq, offset)
+		draw_line(graph, cur_seq, cur_node.seq - 1, offset, false)
+		fill_graph(graph, " ^ ", cur_node.seq, cur_node.seq, offset)
 		line2seq[cur_node.seq + offset_at_index(offset, cur_node.seq)] = cur_node.seq
 		other_info[cur_node.seq] =
 			{ save = cur_node.save, time = cur_node.time, lnum = cur_node.seq, parent = cur_node.parent }
@@ -277,22 +280,10 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 	line2seq[cur_node.seq + offset_at_index(offset, cur_node.seq)] = cur_node.seq
 	other_info[cur_node.seq] =
 		{ save = cur_node.save, time = cur_node.time, lnum = cur_node.seq, parent = cur_node.parent }
-	draw_line(graph, cur_seq, cur_node.seq - 1, offset)
-	-- fill_graph(graph, "|", cur_seq, cur_node.seq - 1, offset)
-	fill_graph(graph, "* ", cur_node.seq, cur_node.seq, offset)
+	draw_line(graph, cur_seq, cur_node.seq - 1, offset, false)
+	fill_graph(graph, " * ", cur_node.seq, cur_node.seq, offset)
 
 	sort_tree_by_latest(cur_node)
-
-	-- local sub_offset = {}
-	-- for k, v in pairs(offset) do
-	-- 	sub_offset[k] = v
-	-- end
-	--
-	-- if not sub_offset[cur_node.seq + 1] then
-	-- 	sub_offset[cur_node.seq + 1] = 1
-	-- else
-	-- 	sub_offset[cur_node.seq + 1] = sub_offset[cur_node.seq + 1] + 1
-	-- end
 	local my_offset = {}
 	for k, v in pairs(offset) do
 		my_offset[k] = v
@@ -344,10 +335,8 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 		line2seq[k] = v
 	end
 
-	for _, sub_node in ipairs(cur_node.children) do
-		draw_line(graph, cur_seq + 1, sub_node.seq, my_offset)
-		-- fill_graph(graph, "|", cur_seq + 2, sub_node.seq, offset)
-		-- fill_graph(graph, "/", cur_seq + 1, cur_seq + 1, offset)
+	for i, sub_node in ipairs(cur_node.children) do
+		draw_line(graph, cur_seq + 1, sub_node.seq, my_offset, i < #cur_node.children)
 
 		_draw_new(sub_node, graph, sub_node.seq, line2seq, other_info, offset)
 		line2seq[sub_node.seq + offset_at_index(offset, sub_node.seq)] = sub_node.seq
@@ -437,6 +426,7 @@ function Undotree:gen_graph_tree()
 		graph[1] = graph[1] .. string.rep(" ", 4) .. "(Original)"
 
 		for i = 2, #graph do
+			graph[i] = string.gsub(string.gsub(graph[i], "^%s+", ""), "%s+$", "")
 			if line2seq[i] ~= nil then
 				local seq = line2seq[i]
 				self.seq2line[seq] = #graph - i + 1
