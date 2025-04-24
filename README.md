@@ -20,21 +20,21 @@ Using Vim's built-in package manager:
 mkdir -p ~/.config/nvim/pack/github/start/
 cd ~/.config/nvim/pack/github/start/
 git clone https://github.com/nvim-lua/plenary.nvim.git
-git clone https://github.com/jiaoshijie/undotree.git
+git clone https://github.com/ruskei/undotree.git
 ```
 
 Using [vim-plug](https://github.com/junegunn/vim-plug)
 
 ```
 Plug 'nvim-lua/plenary.nvim'
-Plug 'jiaoshijie/undotree'
+Plug 'ruskei/undotree'
 ```
 
 Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
 ```lua
 use {
-  "jiaoshijie/undotree",
+  "ruskei/undotree",
   requires = {
     "nvim-lua/plenary.nvim",
   },
@@ -45,7 +45,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 {
-  "jiaoshijie/undotree",
+  "ruskei/undotree",
   dependencies = "nvim-lua/plenary.nvim",
   config = true,
   keys = { -- load the plugin only when using it's keybinding:
@@ -66,7 +66,7 @@ If using [packer.nvim](https://github.com/wbthomason/packer.nvim) undotree can b
 
 ```lua
 use {
-  "jiaoshijie/undotree",
+  "ruskei/undotree",
   config = function()
     require('undotree').setup()
   end,
