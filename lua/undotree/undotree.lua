@@ -119,7 +119,6 @@ local function fill_graph(graph, symbol, start_idx, end_idx, offset)
 		return
 	end
 	for i = _start_idx, _end_idx do
-		print("drawing `" .. symbol .. "` at " .. i)
 		if not graph[i] then
 			graph[i] = symbol
 		else
@@ -172,7 +171,6 @@ local function draw_branch(graph, start_idx, end_idx, offset, branch_idx, branch
 
 	for i = _start_idx, _end_idx do
 		if not graph[i] then
-			print("B drawing | at " .. i)
 			graph[i] = "|"
 		else
 			local symbol = ""
@@ -211,7 +209,6 @@ local function draw_branch(graph, start_idx, end_idx, offset, branch_idx, branch
 				end
 			end
 
-			print("B drawing `" .. symbol .. "` at " .. i)
 			graph[i] = string.gsub(graph[i] .. symbol, "%s+", " ")
 		end
 	end
@@ -326,7 +323,6 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 		end
 
 		if insertion ~= "" then
-			print("inserting " .. insertion .. " at " .. branch_idx)
 			table.insert(graph, branch_idx, insertion)
 		end
 	end
@@ -350,7 +346,6 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 	end
 
 	for i, sub_node in ipairs(cur_node.children) do
-		print("drawing branch, start: " .. cur_seq + 1 .. " to: " .. sub_node.seq)
 		draw_branch(graph, cur_seq + 1, sub_node.seq, offset, i, #cur_node.children)
 
 		_draw_new(sub_node, graph, sub_node.seq, line2seq, other_info, offset)
@@ -360,9 +355,49 @@ local function _draw_new(tree, graph, parent_seq, line2seq, other_info, offset)
 	end
 end
 
+--- @param graph string[]
+--- @param line2seq integer[]
+local function clear_garbage(graph, line2seq)
+	local n_graph = {}
+	local n_line2seq = {}
+
+	local j = 1
+	while j <= #graph do
+		if graph[j]:match("^%s*|%s*$") == nil then
+			local n_s = graph[j]:gsub("^%s+", ""):gsub("%s+$", "")
+			-- table.insert(n_graph, graph[j]:gsub("^%s+", ""):gsub("%s+$", ""))
+			table.insert(n_graph, (#n_graph + 1), n_s)
+			n_line2seq[#n_graph] = line2seq[j]
+		end
+
+		j = j + 1
+	end
+
+	for i, _ in pairs(graph) do
+		graph[i] = nil
+	end
+
+	table.move(n_graph, 1, #n_graph, 1, graph)
+
+	for i, _ in pairs(line2seq) do
+		line2seq[i] = nil
+	end
+
+	for i, k in pairs(n_line2seq) do
+		line2seq[i] = k
+	end
+end
+
+-- * 6
+-- | 5
+-- | 4
+-- | 3
+-- | 2
+-- * 1
+
 --- @param tree Node
 --- @param graph string[]
---- @param line2seq number[]
+--- @param line2seq integer[]
 --- @param other_info table<number, table>
 --- @param last_seq number
 local function gen_graph(tree, graph, line2seq, other_info, last_seq)
@@ -375,6 +410,7 @@ local function gen_graph(tree, graph, line2seq, other_info, last_seq)
 	graph[1] = "*"
 	_draw_new(tree, graph, 0, line2seq, other_info, { 1 })
 	graph[1] = "*"
+	clear_garbage(graph, line2seq)
 end
 
 local Undotree = {}
@@ -475,7 +511,6 @@ function Undotree:gen_graph_tree()
 				goto continue
 			end
 
-			graph[i] = string.gsub(string.gsub(graph[i], "^%s+", ""), "%s+$", "")
 			if line2seq[i] ~= nil then
 				local seq = line2seq[i]
 				self.seq2line[seq] = #graph - i + 1
