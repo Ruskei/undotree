@@ -4,7 +4,7 @@ A neovim undotree plugin written in lua.
 
 **Screenshot**
 
-![preview](https://user-images.githubusercontent.com/43605101/232043141-f4318a13-8a85-41ee-bbb5-6f86511b32fe.png)
+![preview](https://imgur.com/a/sjAsUgj)
 
 Diff previewer window shows the difference between the current node and the node under the cursor.
 
